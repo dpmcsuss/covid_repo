@@ -3,7 +3,7 @@ title: "MA [46]15 - Data Science in R"
 subtitle: "Covid plots from the class"
 author: "Daniel Sussman"
 date: "2022-02-04"
-output: html_document
+output: github_document
 ---
 
 
@@ -17,8 +17,8 @@ knitr::opts_chunk$set(cache.path = "cache/", fig.path='figures/', fig.asp=.66, f
 
 ```{r}
 library(tidyverse)
-load("data/covid19datahub/covid_updated_all_states.RData") 
-load("data/covid19datahub/covid_updated_big6.RData") 
+load("../lectures/data/covid19datahub/covid_updated_all_states.RData") 
+load("../lectures/data/covid19datahub/covid_updated_big6.RData") 
 ```
 
 
