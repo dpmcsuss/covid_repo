@@ -1,0 +1,665 @@
+---
+title: "MA [46]15 - Data Science in R"
+subtitle: "Covid plots from the class: Part 2"
+author: "Daniel Sussman"
+date: "2022-02-18"
+output: github_document
+---
+
+
+
+
+```{r options, echo=FALSE}
+knitr::opts_chunk$set(tidy = FALSE, cache = FALSE) # turn off formatR's tidy
+knitr::opts_chunk$set(comment = "") # remove comment tags
+knitr::opts_chunk$set(cache.path = "cache/", fig.path='figures/', fig.asp=.66, fig.width = 7, fig.align='center', dev="svg")
+```
+
+First I'll load in the packages and the data.
+
+```{r setup}
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(gt))
+suppressPackageStartupMessages(library(lubridate))
+load("../../lectures/data/covid19datahub/covid_updated_all_states.RData") 
+load("../../lectures/data/covid19datahub/covid_updated_big6.RData") 
+```
+
+# Lines and points
+
+## Submission 1
+
+```{r plot1}
+df_1 <- covid %>% 
+  filter(!(is.na(confirmed)|is.na(tests)|is.na(vaccines)))
+
+s <- mean(df_1$confirmed/df_1$tests)
+
+covid_6 %>% 
+  filter(!(is.na(confirmed)|is.na(tests)|is.na(vaccines))) %>% 
+  group_by(state) %>% 
+  ggplot() + 
+  geom_point(aes(
+      tests, 
+      confirmed, 
+      color = (people_vaccinated/population)
+    ), size=1.5) + 
+  facet_wrap(~state) +
+  scale_color_viridis_c() +
+  theme(axis.text.x = element_text(angle=30)) +
+  labs(
+    x = 'Number of Tests', 
+    y = 'Confirmed Cases', 
+    title = "Confirmed Cases vs Number of Tests", 
+    caption = 'Diagonal line shows average test positivity rate for all states',
+    color = "Vaccination Rate"
+  ) +
+  geom_abline(slope = s, intercept = 0)
+```
+This is a plot of confirmed cases vs tests for the 6 states in the big 6 covid data. The color of the lines represents the vaccination rate for that state, and the black diagonal lines represent the average test positivity rate for the entire country.
+
+I wanted to be able to write this as one chunk of code without creating a dummy data frame, but I couldn't figure out a way to do that.
+
+
+## Submission 4
+
+```{r plot4}
+daily %>%
+  group_by(state) %>%
+  filter(people_vaccinated/population > (0.0001)) %>%
+  summarize(
+    m = mean(people_vaccinated/population, na.rm = TRUE),
+    d = mean(deaths/population, na.rm = TRUE)
+  ) %>%
+  arrange(desc(m)) %>%
+  ggplot(aes(x = m, y = d, color = state)) +
+    geom_point() +
+    labs(
+      x = "Mean Vaccination per Day", 
+      y = "Mean Deaths/Population per Day"
+    )
+```
+Plots the Mean Deaths/Population per Day over Mean Vaccination/Population per Day colored by each State.
+
+Filter the data after a certain date.
+
+I don't have any lingering questions as of now.
+
+
+
+## Submission 7
+
+```{r plot7}
+covid_6 %>%
+  filter(state %in% c("Florida", "California", "Massachusetts", "Texas")) %>%
+  select(state, date, deaths) %>%
+  group_by(deaths) %>%
+  ggplot(aes(x = date, y = deaths, color = state)) +
+  geom_point()
+```
+Number of deaths versus date in four specific states from the covid_6 data
+
+I was not able to inly show the four states on the plot. All six are displayed even though I specify which states to use in the filter command.
+
+
+## Submission 10
+
+```{r plot10}
+masscali <- covid_6 %>%
+  filter(state %in% c("Massachusetts", "California")) %>%
+  filter(!is.na(confirmed))
+ggplot(masscali, aes(x=date, y=deaths/confirmed, color=state)) +
+  geom_smooth()
+```
+The plot shows the trend of the ratio of the number of death cases by the number of total confirmed cases over time for 2 states, Massachusetts and California. From the plot we can see that Massachusetts has a very high ratio between 2020-08 and 2020-09, and the ratio of Massachusetts is generally higher than California since 2020-04.
+
+Kinda want to show the contrast between raw stats and the ratio to show the difference between raw data graph and the ratio graph.
+
+
+
+## Submission 12
+
+```{r plot12}
+daily %>%
+  mutate(vaxxed = replace_na(people_vaccinated, 0)) %>%
+  #filter out weird negative values
+  filter(
+    !is.na(confirmed), 
+    !is.na(stringency_index), 
+    confirmed > 0, 
+    population > 0, 
+    people_vaccinated > 0,
+    between(stringency_index, 20, 70)
+  ) %>%
+  group_by(state) %>%
+  arrange(date) %>%
+  mutate(
+    fully_vaxxed = cumsum(vaxxed),
+    perc_vaccinated = fully_vaxxed / population, 
+    perc_covid = confirmed / population
+  ) %>%
+  ungroup() %>%
+  ggplot() +
+  geom_point(aes(x = date, y = perc_covid * 100, color = perc_vaccinated)) +
+  labs(
+    title = "Daily Percentage of Population with Covid by State Stringency Index",
+    y = "Daily % of Population With Covid", 
+    x = "Date", 
+    color = "% Vaccinated", 
+    caption = "Stringency index: the overall strictness of policy measures that primarily restrict people’s behaviour.") +
+    scale_x_date(breaks = "5 months", date_labels = "%b %Y") +
+    scale_color_viridis_c() +
+    facet_wrap(~cut_width(stringency_index, width = 10))
+```
+subset of data after vaccines were available show % daily population 
+with covid and overall % vaccinated population within stringency index groups
+
+
+## Submission 13
+
+```{r plot13}
+after_vax <- covid %>% 
+  filter(!is.na(vaccines)) %>% 
+  mutate(death_rate = deaths/confirmed, death_pc = death_rate/population)
+
+ggplot(after_vax, aes(date, log(death_rate), color = stringency_index)) + #<-- moved aes here
+  geom_point(alpha=.03) +
+  geom_smooth(color = "red", SE = FALSE) +
+  theme(axis.text.x=element_text(angle=30)) +
+  labs(title='Death Rate over Time after Vaccines Available', x='date', y='log(death rate)')
+```
+This plot shows the death rate over time after vaccines became available to the public. The points are colored by stringency_index. As illustrated by the plot, there was a wider variability of death rates in the early days of the vaccine. As more time goes on, death rates start to stabilize and began a downward trend in January. We can also see stringency by color. Stringency was higher when death rates were higher. There are some outliers with lower death rates, that likely correspond to specific states.
+
+I would like to be able to explore the qualities of the states with the outlying death rates. Not sure how to compare them to the states with higher death rates.
+
+
+
+
+## Submission 18
+
+```{r plot18}
+d<- daily %>%
+  select(date,state,confirmed,deaths,vaccines) %>%
+  filter(
+    date>='2021-01-01'
+    ,state%in%c('California','Texas', 'New York','PennsylVania','Massachusetts')
+  ) %>%
+  group_by(date,state) %>%
+  summarise(confirmed, vaccines, sum(deaths)/sum(confirmed)*100)
+dd <- rename(d, death_rate = `sum(deaths)/sum(confirmed) * 100`)
+ggplot(dd,aes(x=date,y=death_rate)) +
+  geom_point(aes(color=vaccines),alpha=0.7) +
+  geom_smooth(size=1.2) +
+  ylim(0,10) +
+  labs(y='death rate', title='Covid-19 death rate since 2020',color='people vaccinated') +
+  facet_wrap(~as.factor(state))
+```
+The plot shows Covid death rate in four different states, colored by people vaccinated
+
+When drawing ggplot, I wasn't able to change the scale of the third variable (color/alpha/size).
+
+I would like to learn more about how to select the most effective plot in different occasions
+
+## Submission 19
+
+```{r plot19}
+covid_6 %>%
+  filter(!is.na(people_fully_vaccinated)) %>%
+  filter(state == "Massachusetts"|state == "California") %>%
+  mutate(prop = people_fully_vaccinated/population) %>%
+  ggplot() + 
+  geom_line(mapping = aes(x = date, y = prop,color=state))
+```
+I made a plot based on the proportion of people that are fully vaccinated in Massachusetts and California in different times. From the plot we can see that in January 2021, covid-19 vaccines started to enter the market. From January 2021 to July 2021, there is a rapid growth in the amount of people who got fully vaccinated in both states. Yet, till January 2022, the proportion of people who are fully vaccinated reach 78% in Massachusetts while that number is only 68% in California.
+
+
+
+
+
+## Submission 21
+
+```{r plot21}
+covid_6 %>%
+  arrange(covid_6, state, date) %>%
+  filter(!is.na(deaths)) %>%
+  select(state, date, deaths) %>%
+  ggplot(aes(x = state, y = deaths)) + geom_boxplot()
+
+
+covid_6 %>%
+  arrange(covid_6, state, date) %>%
+  filter(!is.na(deaths), !is.na(confirmed)) %>%
+  select(state, date, confirmed, deaths) %>%
+  mutate(death_rates = deaths/confirmed) %>% filter(death_rates <= 0.09) %>%
+  ggplot(aes(date, death_rates)) + geom_point(alpha = 0.1) +
+  geom_smooth() +
+  facet_wrap(~ as.factor(state)) +
+  theme(axis.text.x = element_text(angle = 40))
+```
+the first code creates a box plot showcasing the covid deaths in each state after filtering out the missing values.
+
+the second code rearrange the covid 6 data by state and date, then filtering out missing values, keep only state, date, confirmed, and deaths column's. It then creates a new column for death rate. Finally, ggplot plot the graph with death_rate <= 0.09 with smoothers.
+
+
+
+
+
+## Submission 22
+
+```{r plot22}
+need<- daily_6 %>%
+  filter(
+    !is.na(vaccines),
+    confirmed > 0,
+    people_fully_vaccinated > 0,
+    date>as.Date("2021-01-31")
+  )
+new <- need %>% mutate(vac_rate =cumsum(people_fully_vaccinated)/population)
+k <- new %>% filter(date<as.Date("2021-12-15"))
+library(modelr)
+mode <-lm(confirmed ~vac_rate, k)
+new %>% add_predictions(mode) %>% #<-- Moved outside ggplot
+  ggplot(aes(x= vac_rate)) +
+  geom_line(aes(y = pred), alpha = 0.9)+
+  geom_point(aes(y = confirmed, color = state), size = 0.2, alpha = 0.4) +
+  facet_wrap(~months.Date(date)) +
+  labs( 
+    x = "vaccination rate ",         
+    y = "confirmed cases ",        
+    title = "Predict of Vaccination and Actual" ,        
+    caption = "Feb. 2021 - Jan.2022 "
+  )
+```
+The plot compares the difference between the actual Covid-19 cases after vaccination started and the predicted covid-19 cases influenced by vaccine(based on the data before Omicron).
+
+I want to put the date on the x-axis but the lm seems to be meaningless if x = date.
+
+
+
+
+
+## Submission 25
+
+```{r plot25}
+df<- daily %>%
+  mutate(month = month(date))%>%
+  mutate(year = year(date))%>%
+  filter(year==2021)%>%
+  group_by(state,month,year)%>%
+  summarize(
+    tpp = log(sum(tests,na.rm=TRUE)/mean(population)),
+    pd = sum(deaths,na.rm=TRUE)/mean(population)
+  )
+  
+ggplot(df)+
+  geom_point(aes(x=tpp,y=pd,colour=factor(month)))+
+  geom_smooth(aes(x=tpp,y=pd),method="loess",colour="black")+
+  ylab("Percent Deceased")+
+  xlab("log(Tests per person)")+
+  labs(colour="Month",title = "Deaths vs. Tests per Person (2021)")
+```
+A scatterplot and smoothing curve examining the relationship between the (log of the) number of tests administered per person and the fatality rate in 2021. Using only data from 2021 as is the only full year of the pandemic with the most accurate tests being used by most practitioners. From the plot, we see that tpp maintain a mostly flat, though slightly increasing relationship with percent deceased. At around 0.05 tests per person (log = -3) there is a rise in the fatality rate, peaking around 0.14 tests per person (log=-2) before a slight dip at higher testing rates and small rise in deaths at the highest points. We also see, through the monthly coding, a clear trend where spring months see the least fatalities on average, while winter months see the most.
+
+I'd like to have better broken down the date, either by state or by month, but there simply weren't enough observations to make this feasible. As we can see there's huge variation in deaths, particularly in winter months (and august) around log=-2 that could vary well be better explained by a monthly model as spring months appear to tamper down the y estimates in that testing range.
+
+None particularly
+
+## Submission 26
+
+```{r plot26}
+covid_6 %>%
+  group_by(state, date) %>%
+  summarize(avg_econ_support_index = mean(economic_support_index, na.rm = TRUE)) %>%
+  ggplot(aes(x= date, y= avg_econ_support_index, color=state))  +
+  geom_smooth()
+```
+Shows a brief timeline of average economic support index of 6 big states throughout the pandemic
+
+I would have liked to incorporate the number of confirmed cases in each state somehow
+
+
+
+## Submission 27
+
+```{r plot27}
+ggplot(data = daily, mapping = aes(x = date, y = confirmed)) + geom_point()
+```
+Getting the daily covid cases, and see the trend in which the number of cases increases in terms of points.
+
+I wanted to use more of the code that I learned in the homework but it was quite hard visualizing without a strict rule.
+
+
+
+## Submission 30
+
+```{r plot30}
+covid_6 %>%
+  group_by(state,date) %>%
+  summarise(confirm_rate = confirmed/population) %>%
+  ggplot(aes(x=date,y=confirm_rate),color=state) +
+  geom_point()
+```
+This plot gives the confirmrate of each state day by day
+
+I'm confused that I have written the color=state but it only gives the black.
+
+# Boxes and bars
+
+## Submission 6
+
+```{r plot6}
+of_interest<-c("Maryland","Virginia")
+covid %>%
+  group_by(state) %>%
+  filter(state %in% of_interest) %>%
+  summarize(max_confirmed=max(confirmed,na.rm=T)) %>%
+  ggplot(aes(x=state,y=max_confirmed,fill=state)) +
+  geom_col(show.legend=F)
+```
+creates a set of states used to filter, and then creates a column graph displaying the maximum recorded confirmed cases on a single date the state experienced over the course of the pandemic. The code also colors each column by state.
+
+filter by of interest states without the use of a seperate list
+
+
+```{r, eval=FALSE}
+filter(covid_6, state == "Florida" | "California" | "Massachusetts" | "Texas") %>%
+  select(date, deaths) %>%
+  group_by(deaths) %>%
+  ggplot(data = covid_6) +
+  geom_point(mapping = aes(x = date, y = deaths, color = state))
+```
+
+
+
+
+## Submission 11
+
+```{r plot11}
+cleaned_covid <- covid %>% drop_na()
+deaths_by_state <- cleaned_covid %>%
+  group_by(state) %>% summarize(total_deaths=sum(deaths))
+ggplot(deaths_by_state) +
+  geom_bar(aes(x=state, y=total_deaths, color=state), stat='identity') +
+  coord_flip()
+```
+Plot looks at each state on the y axis and total deaths on the x axis. Was able to do this much simpler after learning about the group by and summarize methods from dplyr.
+
+I was able to accomplish everything I wanted to.
+
+Don't have many questions, sometimes a little confused on how to make use of my groups when using group_by
+
+
+## Submission 23
+
+```{r plot23}
+daily %>% filter(state == 'California') %>% #<-- moved outside ggplot
+  ggplot(aes(x = date, y =  confirmed)) +
+  geom_bar(stat = "identity", fill = 'steelblue')
+```
+From the figure, we could see that during 2021, on January, there was an apparent fluctuation. And in January in 2022, reached a new peak value.
+
+I  want to use "group_by" to group some data and analyze what the covid is like now. However, I don't know how to use the correct command to do this thing.
+
+What's the relationship with "gglpot" and "geom_point()" ?
+
+
+## Submission 24
+
+```{r plot24}
+vaccination<-covid %>% 
+    filter(!is.na(people_fully_vaccinated)) %>%
+    group_by(people_fully_vaccinated) %>% 
+    mutate(prop = log(deaths/(confirmed/population)))
+ggplot(vaccination, aes(x = people_fully_vaccinated, y = state, color = prop)) + 
+    geom_point() +
+    labs(
+      x = 'Number of Fully Vaccinated People',
+      y = 'States',
+      title = 'Rates of Death in Population Post Vaccination',
+      color = 'Log\n Proportion\n of Deaths in\n Population\n cases'
+    ) +
+    theme_bw() +
+    scale_color_distiller(palette = "YlOrRd")
+```
+This plot is misleading in that it appears as if the more people that are vaccinated, the higher the death rate overall, but if you look subtly towards the ends of the points, the death rates are slightly lower (or I can be imagining it).
+
+I don't know if my eyes are playing tricks on me, but this plot did not come out the way I originally imagined it to be. I had wanted to show the changes in death rates per case rate when compared against vaccination levels, but I guess this should have been plotted over time. Would a heatmap also be misleading?
+
+
+
+
+## Submission 31
+
+```{r plot31}
+daily %>%
+  group_by(state) %>%
+  filter(vaccines > 0, n() > 700) %>%
+  mutate(count = n()) %>%
+  ggplot(aes(reorder(state, vaccines, FUN = median), log(vaccines))) +
+  geom_boxplot(aes(fill = count), outlier.alpha = .1) +
+  scale_fill_viridis_c() +
+  labs(x = "State ordered by median vaccines", y = "Log of Vaccines")
+```
+I used daily dataset and filtered out the states with less than 700 data entries. I used mutate to create a new variable count as the number of data entries for each state. The plot is log vaccines boxplots for each state ordered by median of vaccines. According to the plot, California, Texas, and Illinois have the most vaccines, while Illinois have a low count of data entries.
+
+
+
+
+## Submission 15
+
+```{r plot15}
+library(maps)
+
+states_map <- map_data("state")
+df <- covid %>%
+  separate("date", c("Year", "Month", "Day"), sep = "-") %>%
+  filter(Year == "2020", Month == "12", Day == "31")
+df$state <- tolower(df$state)
+
+ggplot(df, aes(map_id = state)) + geom_map(aes(fill = confirmed),  map = states_map) +
+  expand_limits(x = states_map$long, y = states_map$lat) +
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(title = "US Confirmed Cases per State by 2020", x = "longitude", y = "latitude",
+       caption = " https://www.bsg.ox.ac.uk/research/research-projects/covid-19-government-response-tracker") +
+  coord_fixed(1.3) +
+  theme(panel.background = element_blank())
+```
+The map plot shows how many confirmed cases per state by 2020-12-31.
+
+I wanted to add text indicating each state on the map, but I failed by using geom_text(), so I am not sure how to accomplish that.
+
+nope
+
+
+
+# Tables
+
+## Submission 2
+
+```{r plot2}
+covid %>%
+  filter(date >= "2021-01-01" & date <= "2022-01-01") %>%
+  group_by(state) %>%
+  summarize(mean_deaths = mean(deaths, na.rm = TRUE)) %>%
+  gt() %>%
+  tab_header(title = "Average number of Covid-19 deaths across US states", subtitle = "Jan 1st 2021 to Jan 1st 2022") %>% 
+  data_color(mean_deaths, scales::col_quantile("Reds", domain = NULL))
+```
+Table showing the mean number of Covid-19 deaths across US states between Jan 1st 2021 and Jan 1st 2022
+
+
+
+
+
+## Submission 3
+
+```{r plot3}
+mean_death_rate_of_confirmed <- covid %>%
+  filter(people_vaccinated>=1) %>%
+  mutate(death_rate_of_confirmed = deaths/confirmed) %>%
+  select(state, death_rate_of_confirmed) %>%
+  group_by(state)%>%
+  summarize(mdrc = mean(death_rate_of_confirmed)) 
+
+mean_death_rate_of_confirmed 
+
+mean_death_rate_of_confirmed2 <- covid %>%
+  filter(!is.na(confirmed),!is.na(deaths)) %>%
+  filter(is.na(people_vaccinated)) %>%
+  mutate(death_rate_of_confirmed2 = deaths/confirmed) %>%
+  select(state, death_rate_of_confirmed2) %>%
+  group_by(state)%>%
+  summarize(mdrc2 = mean(death_rate_of_confirmed2))
+
+
+mean_death_rate_of_confirmed2
+```
+The first table shows the mean death rate of people who are confirmed for each state after people started to get vaccinated, and the second table shows before people started to get vaccinated. Overall, the death rates are lower after people started to get vaccinated for most states.
+
+I wonder if there's a way to combine the two tables to see the numbers side by side, and then create a side-by-side bar chart to visualize the data.
+
+None at the moment.
+
+
+## Submission 5
+
+```{r plot5}
+covid_6  %>% group_by(state)  %>%
+  summarize(
+    count = n(),
+    population = mean(population), #<-- ADDED
+    median_vaccinations = median(people_fully_vaccinated, na.rm = TRUE),
+    median_deaths = median(deaths, na.rm = TRUE),
+    proportion_vaccinated = median_vaccinations / population,
+    proportion_deaths = median_deaths / population
+  ) %>% 
+  gt() %>% 
+  tab_header(
+    title = "Relationship between proportion of Vaccinations vs. proportion of deaths for top 6 states "
+  ) %>%
+  fmt_percent(
+    columns = c(proportion_vaccinated, proportion_deaths),
+    decimals = 2
+  )
+```
+I am trying to create a summary table that shows the proportion of vaccinated vs deaths for each state, to then plot and see if there is a relationship between the two. (ex/ states with higher proportions of vaccinations have lower death proportions etc)
+
+I didn't get around to plotting because I am having some issues with the table, although I am grouping by state, I get multiple rows of the calculations per state (same numbers in each one).I was unable to solve this problem
+
+N/A
+
+
+## Submission 8
+
+```{r plot8}
+covid %>% group_by(tests) %>%
+  summarize(mean_death = mean(deaths, na.rm = TRUE))
+```
+Similar to last time, I want to more about the relationship between test cases and deaths. This time, by using the grouby function and summarize function, I want to figure out how many deaths per cases
+
+I want to graph it but it returns a table.
+
+I think I need to practice how to use the dplyr library more.
+
+## Submission 9
+
+```{r plot9}
+daily_6 %>%
+  group_by(state) %>%
+  summarize(pct_dead_if_fullvaxed = mean(!is.na(people_fully_vaccinated)/!is.na(deaths)))
+```
+This table has the percent of people who died who were fully vaccinated by state. We can tell that in all states the percent was approximately the same somewhere between 55-58% of deaths, people were fully vaccinated.
+
+No, but I am still a bit confused about the missing values and how it might have affected my line of code and my table.
+
+
+## Submission 14
+
+```{r plot14}
+one_day <- "2020-03-01"
+
+covid %>%
+  filter(date == one_day) %>%
+  select(date, state, stringency_index, government_response_index, containment_health_index) %>%
+  gt() %>%
+  tab_header(
+    title = "The three indexs of each state on Mar 1 2020",
+    subtitle = "2020-03-01"
+  ) %>%
+  fmt_date(
+    columns = date,
+    date_style = 2
+  )
+```
+I code a gt table to find the  stringency index, government response index, and containment health index index of the states on Mar 1, 2020. There are 26 states are showed in the table on Mar 1, 2020.  I used filter, select, gt functions.
+
+I want to exclude all the repeated data, eg: MA only return once.
+
+I am still working on the "rank" function.
+
+## Submission 16
+
+```{r plot16}
+covid_6 %>%
+  group_by(state) %>%
+  summarize(percent_recovered = mean(!is.na(recovered)/!is.na(confirmed)))
+```
+Shows percent of people in each of the 6 states that got covid and recovered
+
+Wanted to make a nice table but library(gt) wasn't working on my computer
+
+
+
+## Submission 17
+
+```{r plot17}
+(high_risk_states<-(daily_6 %>%
+  filter(confirmed > mean(confirmed))%>%
+  group_by(state) %>%
+  summarize(total_confirmed=n()) %>%
+  arrange(desc(total_confirmed))%>%
+    slice_head(n=4))
+ $state)
+```
+Select the top 4 states with highest confirmed numbers
+
+I was trying to filter by date
+
+
+
+
+
+## Submission 20
+
+```{r plot20}
+MA <- "Massachusetts"
+covid %>%
+  filter(state == MA) %>% 
+  select(date, state, confirmed, deaths, tests, vaccines) %>%
+  head(10) %>% #<-- Added
+  gt() %>%
+  tab_header(
+    title = "The Covid-19 situation in Massachusetts'",
+    subtitle = "From February 2, 2020 to January 25,2022"
+  ) %>%
+  fmt_date(
+    columns = date,
+    date_style = 2
+  )
+```
+I choose the four aspects of confirmed Covid-19, deaths, tests and vaccines to get the situation of Covid-19 in Massachusetts. I choose gt table for gt formatting, and date style of the 2. From the March,2020 to the April,2020, the number of confirmed Covid-19 has increased rapidly, and stay the number until the June,2020, then the number of confirmed Covid-19 has decreased with the rapid increases number of tests. In the October,2020, the number of confirmed number has increased a lot again, and then decreased in 2021 with more people take the vaccine. But the situation of confirmed number has increased again in January 2022. The death's trend is not change much, with slowly increase changed with the number of confirmed number. I think the covid-19 has quickly controlled in MA by the action of require citizens doing test and taking vaccine as time going, except the suddenly increase of confirmed number, may be because the change type of the virus.
+
+
+
+## Submission 28
+
+```{r plot28}
+select(covid, state, date, c1_school_closing, c2_workplace_closing)
+```
+Table shows all school and workplace closings organized by state and date
+
+I wish I was able to remove all rows that have zero. I know we learned N/A but removing 0 would be helpful too
+
+
+
+

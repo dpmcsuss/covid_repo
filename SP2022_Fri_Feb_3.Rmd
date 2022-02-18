@@ -109,7 +109,7 @@ Create a heat map with the darkest colored states being the one with the highest
 
 ## Adding facets
 
-```{r}
+```{r fig.height=20, fig.width=10}
 ggplot(data=covid)+
   geom_point(mapping=aes(x=date,y=confirmed/population,color=state))+
   facet_wrap(~state,nrow=8)
